@@ -2,11 +2,11 @@ function cheb(T::Type, N::Integer)
     if N == 0
         return (ones(T, 1), zeros(T, 1, 1))
     else
-        x = (-cos.((T(π)*(0:N))./N) .+ 1) ./ 2
-        c = [2; ones(T, N-1, 1); 2] .* (-1) .^ (0:N)
+        x = (-cos.((T(π) * (0:N)) ./ N) .+ 1) ./ 2
+        c = [2; ones(T, N - 1, 1); 2] .* (-1) .^ (0:N)
         dx = x .- x'
         D = (c * (1 ./ c)') ./ (dx + I)
-        D[diagind(D)] .-= vec(sum(D; dims=2))
+        D[diagind(D)] .-= vec(sum(D; dims = 2))
         return (x, D)
     end
 end
@@ -16,20 +16,22 @@ function collocation(T::Type, sys::ODESystem, n_mesh::Integer, n_coll::Integer; 
     iv = get_iv(sys)
     sts = states(sys)
     ps = parameters(sys)
-    f = @RuntimeGeneratedFunction(build_function([x.rhs for x in equations(sys)],sts,ps,iv)[1])
+    f = @RuntimeGeneratedFunction(
+        build_function([x.rhs for x in equations(sys)], sts, ps, iv)[1]
+    )
     n_var = length(sts)
 
     # Generate the inner symbols
-    @variables u[1:n_mesh, 1:n_coll+1, 1:n_var]
+    @variables u[1:n_mesh, 1:(n_coll+1), 1:n_var]
     @parameters ka[1:n_mesh]
-    for i in 1:n_mesh - 1
+    for i = 1:(n_mesh-1)
         u[i, end, :] .= u[i+1, 1, :]  # continuity
     end
     @named coll = NonlinearSystem([], vec(u), ka)
 
     # Namespace the inner symbols
-    @variables coll₊u[1:n_mesh, 1:n_coll+1, 1:n_var]
-    for i in 1:n_mesh - 1
+    @variables coll₊u[1:n_mesh, 1:(n_coll+1), 1:n_var]
+    for i = 1:(n_mesh-1)
         coll₊u[i, end, :] .= coll₊u[i+1, 1, :]  # continuity
     end
     @parameters coll₊ka[1:n_mesh]
@@ -47,18 +49,24 @@ function collocation(T::Type, sys::ODESystem, n_mesh::Integer, n_coll::Integer; 
 
     t_int_base, D = cheb(T, n_coll)
     # End points aren't used in the collocation equations (they are used to enforce continuity instead)
-    t_int_base = t_int_base[1:end-1]
-    D = D[1:end-1, :]
+    t_int_base = t_int_base[1:(end-1)]
+    D = D[1:(end-1), :]
 
     Tp = t[2] - t[1]
 
     # Collocation equations
     eqns = Vector{Equation}()
-    for i in 1:n_mesh
-        Dx = [D * coll₊u[i, :, k] for k in 1:n_var]
-        t_int = Tp*(coll₊ka[i] .* t_int_base .+ sum(coll₊ka[1:i-1]; init=Num(0)))
-        f_vals = [Tp*coll₊ka[i]*Base.invokelatest(f, coll₊u[i, j, :], p, t_int[j]) for j in eachindex(t_int)]
-        append!(eqns, [Dx[k][j] ~ f_vals[j][k] for k in eachindex(Dx), j in eachindex(f_vals)])
+    for i = 1:n_mesh
+        Dx = [D * coll₊u[i, :, k] for k = 1:n_var]
+        t_int = Tp * (coll₊ka[i] .* t_int_base .+ sum(coll₊ka[1:(i-1)]; init = Num(0)))
+        f_vals = [
+            Tp * coll₊ka[i] * Base.invokelatest(f, coll₊u[i, j, :], p, t_int[j]) for
+            j in eachindex(t_int)
+        ]
+        append!(
+            eqns,
+            [Dx[k][j] ~ f_vals[j][k] for k in eachindex(Dx), j in eachindex(f_vals)],
+        )
     end
 
     # Bindings to the inner variables
@@ -68,15 +76,16 @@ function collocation(T::Type, sys::ODESystem, n_mesh::Integer, n_coll::Integer; 
     sts_end = [Num(Variable(st, 1)) for st in sts_names]
     append!(eqns, coll₊u[end, end, :] .~ sts_end)
 
-    NonlinearSystem(eqns, [sts_begin; sts_end; p; t], []; name, systems=[coll])
+    return NonlinearSystem(eqns, [sts_begin; sts_end; p; t], []; name, systems = [coll])
 end
 
-collocation(sys::ODESystem, args...; kwargs...) =
-    collocation(Float64, sys, args...; kwargs...)
+function collocation(sys::ODESystem, args...; kwargs...)
+    return collocation(Float64, sys, args...; kwargs...)
+end
 
 function testsystem()
     @parameters t a b
     @variables x(t) x′(t)
     D = Differential(t)
-    ODESystem([D(x) ~ x′, D(x′) ~ -a*x′ - x - b*x^3])
+    return ODESystem([D(x) ~ x′, D(x′) ~ -a * x′ - x - b * x^3])
 end
