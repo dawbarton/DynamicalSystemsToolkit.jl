@@ -99,7 +99,7 @@ function CollocationSystem(
 
     return CollocationSystem(
         eqns,  # eqs
-        MTK.value.([sts_begin; sts_end; p; vec(coll₊u); coll₊t]),  # states
+        MTK.value.([sts_begin; sts_end; p; unique(vec(coll₊u)); coll₊t]),  # states
         MTK.value.(coll₊ka),  # ps
         name,  # name
         defaults,  # defaults
