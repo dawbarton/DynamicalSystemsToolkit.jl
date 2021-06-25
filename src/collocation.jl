@@ -99,8 +99,8 @@ function CollocationSystem(
 
     return CollocationSystem(
         eqns,  # eqs
-        [sts_begin; sts_end; p; vec(coll₊u); coll₊t],  # states
-        coll₊ka,  # ps
+        MTK.value.([sts_begin; sts_end; p; vec(coll₊u); coll₊t]),  # states
+        MTK.value.(coll₊ka),  # ps
         name,  # name
         defaults,  # defaults
         n_dim,  # n_dim
@@ -114,6 +114,9 @@ end
 
 function CollocationSystem(sys::ODESystem, args...; kwargs...)
     return CollocationSystem(Float64, sys, args...; kwargs...)
+end
+
+function add_boundarycondition!(coll::CollocationSystem, bc)
 end
 
 # CollocationSystem does not allow embedded systems (it's not meaningful)
