@@ -9,9 +9,13 @@ const MTK = ModelingToolkit
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-# Exports
+# Exports - CollocationSystem
 
-export CollocationSystem
+export CollocationSystem, add_boundarycondition!, generate_initialconditions
+
+# Exports - DynamicalSystem
+
+export DynamicalSystem
 
 # Abstract types
 
@@ -23,8 +27,12 @@ include("collocation.jl")
 
 # Utilities
 
-function bind_parameters!(basesys::AbstractDynamicalSystem, sys1::AbstractDynamicalSystem, sys2::AbstractDynamicalSystem, ps)
+function _strip_toplevel(name::String)
+    idx = findfirst(==('₊'), name)
+    return idx === nothing ? name[1:0] : name[nextind(name, idx):end]
 end
+_strip_toplevel(name::Symbol) = Symbol(_strip_toplevel(String(name)))
+
 
 # General DynamicalSystem
 

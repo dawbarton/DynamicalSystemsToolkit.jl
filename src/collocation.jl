@@ -27,10 +27,14 @@ struct CollocationSystem{T} <: AbstractDynamicalSystem
     t_coll::Vector{T}
     D::Matrix{T}
     D⁻¹::Matrix{T}
+    ode_ps::Vector
+    ode_u₀::Vector
+    ode_u₁::Vector
+    ode_t::Vector
 end
 
 function CollocationSystem(
-    T::Type, sys::ODESystem, n_mesh, n_coll; name=gensym(nameof(sys))
+    T::Type, sys::ODESystem, n_mesh, n_coll; name=gensym(nameof(sys)), free_ps=false
 )
     # Turn the ODESystem into a function we can evaluate
     iv = MTK.get_iv(sys)  # independent variable
@@ -81,26 +85,34 @@ function CollocationSystem(
             j in eachindex(t_int)
         ]
         append!(
-            eqns, [Dx[k][j] ~ f_vals[j][k] for k in eachindex(Dx), j in eachindex(f_vals)]
+            eqns, [0 ~ Dx[k][j] - f_vals[j][k] for k in eachindex(Dx), j in eachindex(f_vals)]
         )
     end
 
     # Bindings to the inner variables
     sts_names = nameof.(MTK.operation.(sts))
     sts_begin = [Num(Variable(st, 0)) for st in sts_names]
-    append!(eqns, coll₊u[1, 1, :] .~ sts_begin)
+    append!(eqns, 0 .~ coll₊u[1, 1, :] .- sts_begin)
     sts_end = [Num(Variable(st, 1)) for st in sts_names]
-    append!(eqns, coll₊u[end, end, :] .~ sts_end)
+    append!(eqns, 0 .~ coll₊u[end, end, :] .- sts_end)
 
     # Defaults
     defaults = merge(
         MTK.get_defaults(sys), Dict(MTK.value(ka) => one(T) / n_mesh for ka in coll₊ka)
     )
 
+    new_sts = [sts_begin; sts_end; unique(vec(coll₊u)); coll₊t]
+    new_ps = copy(coll₊ka)
+    if free_ps
+        append!(new_sts, p)
+    else
+        append!(new_ps, p)
+    end
+
     return CollocationSystem(
         eqns,  # eqs
-        MTK.value.([sts_begin; sts_end; p; unique(vec(coll₊u)); coll₊t]),  # states
-        MTK.value.(coll₊ka),  # ps
+        MTK.value.(new_sts),  # states
+        MTK.value.(new_ps),  # ps
         name,  # name
         defaults,  # defaults
         n_dim,  # n_dim
@@ -109,6 +121,10 @@ function CollocationSystem(
         t_coll_full,  # t_coll
         D_full,  # D
         D_full⁻¹,  # D⁻¹
+        p,  # ode_ps
+        sts_begin,  # ode_u₀
+        sts_end,  # ode_u₁
+        coll₊t,  # ode_t
     )
 end
 
