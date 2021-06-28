@@ -19,17 +19,14 @@ function hopf()
     )
 end
 
-function hopf_test()
-    coll = CollocationSystem(hopf(), 1, 3)
-    add_boundarycondition!(coll, (u₀, t₀, u₁, t₁, p) -> u₀)  # periodicity
-    add_boundarycondition!(coll, (u₀, t₀, u₁, t₁, p) -> [0 ~ t₀, 0 ~ t₁ - 2π])  # start time and phase condition
+function hopf_test(; n_mesh=5, n_coll=4)
+    coll = CollocationSystem(hopf(), n_mesh, n_coll)
+    add_boundarycondition!(coll, (u₀, t₀, u₁, t₁, p) -> u₀ .- u₁)  # periodicity
+    add_boundarycondition!(coll, (u₀, t₀, u₁, t₁, p) -> [0 ~ t₀, 0 ~ u₀[2]])  # start time and phase condition
     sol = t -> (cos(t), sin(t))
-    ics = Dict(generate_initialconditions(coll, sol, (0, 2π)))
-    fun = NonlinearFunction(NonlinearSystem(coll))
-
-    res = fun(getindex.(Ref(ics), states(coll)), getindex.(Ref(ModelingToolkit.get_defaults(coll)), parameters(coll)))
-
-    return (coll, ics, fun, res)
+    ics = generate_initialconditions(coll, sol, (0, 2π))
+    prob = NonlinearProblem(NonlinearSystem(coll), ics, [], jac=true)
+    return (coll, prob)
 end
 
 function test2()

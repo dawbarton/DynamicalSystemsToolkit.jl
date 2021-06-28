@@ -54,7 +54,11 @@ function CollocationSystem(
     @variables coll₊t[0:1]
 
     # Regenerate the parameters as variables
+    if free_ps
     p = [Num(Variable(nameof(par))) for par in ps]
+    else
+        p = ps
+    end
 
     # Generate the collocation equations for each mesh interval
     #   D*u ~ Tp*f(u, p, t)
