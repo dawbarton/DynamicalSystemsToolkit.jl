@@ -132,7 +132,40 @@ function CollocationSystem(sys::ODESystem, args...; kwargs...)
     return CollocationSystem(Float64, sys, args...; kwargs...)
 end
 
+"""
+    $SIGNATURES
+
+Add equations that are a function of the boundary states and times to `coll`. The input `bc`
+is assumed to be a function of the form `(u₀, t₀, u₁, t₁, p) -> equation` where `u₀` and
+`u₁` are state variables at the start and end of the interval respectively, `t₀` and `t₁`
+are the start and end times, and `p` are the underlying ODE system parameters.
+
+The value returned from `bc` can be an equation or a vector of equations.
+
+`u₀` and `u₁` have the states in the same order as the underlying ODE system.
+
+## Example - periodic boundary conditions
+
+```julia
+add_boundarycondition!(coll, (u₀, t₀, u₁, t₁, p) -> u₀ .~ u₁)
+```
+
+Note that `.~` is used since `u₀` and `u₁` are vectors of variables.
+"""
 function add_boundarycondition!(coll::CollocationSystem, bc)
+    eqn = bc(coll.ode_u₀, coll.ode_t[1], coll.ode_u₁, coll.ode_t[2], coll.ode_ps)
+    if eqn isa Equation
+        push!(coll.eqs, eqn)
+    elseif eqn isa Vector{Equation}
+        append!(coll.eqs, eqn)
+    elseif eqn isa Num
+        push!(coll.eqs, 0 ~ eqn)
+    elseif eqn isa Vector{Num}
+        append!(coll.eqs, 0 .~ eqn)
+    else
+        throw(ArgumentError("Input function should return a (vector of) Equation or Num"))
+    end
+    return coll
 end
 
 # CollocationSystem does not allow embedded systems (it's not meaningful)
