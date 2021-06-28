@@ -168,6 +168,47 @@ function add_boundarycondition!(coll::CollocationSystem, bc)
     return coll
 end
 
+function generate_initialconditions(
+    coll::CollocationSystem{T}, sol, tspan; mesh=nothing
+) where {T}
+    # Mesh intervals
+    ka = mesh === nothing ? ones(T, coll.n_mesh) ./ coll.n_mesh : mesh
+    @assert length(ka) == coll.n_mesh
+    # Generate mesh with representation points
+    Tp = tspan[end] - tspan[begin]
+    t_coll = coll.t_coll[1:(end - 1)]
+    t_int = similar(t_coll)
+    # Determine the initial conditions
+    ics = Vector{Pair{typeof(Variable(:x)), T}}()
+    sizehint!(ics, (coll.n_mesh*coll.n_coll + 1)*coll.n_dim)
+    basename = _strip_toplevel(MTK.renamespace(coll.name, ""))  # need to strip the top-level namespace since it isn't used in solve
+    basename_u = Symbol(basename, :coll₊u)
+    for i in eachindex(ka)
+        t_int .= tspan[begin] .+ Tp .* (ka[i] .* t_coll .+ sum(ka[1:(i - 1)]))
+        for j in eachindex(t_int)
+            sts = sol(t_int[j])
+            for k in eachindex(sts)
+                push!(ics, Variable(basename_u, i, j, k) => sts[k])
+            end
+        end
+    end
+    sts = sol(tspan[end])
+    for k in eachindex(sts)
+        push!(ics, Variable(basename_u, coll.n_mesh, coll.n_coll + 1, k) => sts[k])
+    end
+    # User-defined state variables
+    for (var, val) in zip(coll.ode_u₁, sts)  # assumes sts = sol(tspan[end])
+        push!(ics, MTK.value(var) => val)
+    end
+    for (var, val) in zip(coll.ode_u₀, ics)  # FRAGILE: assumes first elements of ics correspond to sol(tspan[begin])
+        push!(ics, MTK.value(var) => val[2])
+    end
+    # Start/end times
+    push!(ics, Variable(Symbol(basename, :coll₊t), 0) => tspan[begin])
+    push!(ics, Variable(Symbol(basename, :coll₊t), 1) => tspan[end])
+    return ics
+end
+
 # CollocationSystem does not allow embedded systems (it's not meaningful)
 ModelingToolkit.get_systems(::CollocationSystem) = NonlinearSystem[]
 
